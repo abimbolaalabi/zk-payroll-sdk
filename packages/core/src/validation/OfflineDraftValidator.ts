@@ -40,6 +40,23 @@ export class OfflineDraftValidator {
     const warnings: ValidationIssue[] = [];
     const validRecordIndices = new Set<number>();
 
+    // Defensive guard: a null/undefined draft is invalid, not a crash.
+    if (!draft) {
+      blockers.push({
+        severity: "blocker",
+        category: "structure",
+        message: "Draft must be a valid payroll draft object",
+        code: ValidationErrorCodes.MISSING_DRAFT_ID,
+      });
+      return this.buildResult(
+        draft,
+        blockers,
+        warnings,
+        validRecordIndices,
+        this.elapsedMs(startTime)
+      );
+    }
+
     try {
       // Check draft structure
       const structureIssues = this.validateStructure(draft);
@@ -48,7 +65,7 @@ export class OfflineDraftValidator {
 
       // If there are structure blockers, can't continue validating records
       if (blockers.some((i) => i.category === "structure")) {
-        const duration = Date.now() - startTime;
+        const duration = this.elapsedMs(startTime);
         return this.buildResult(draft, blockers, warnings, validRecordIndices, duration);
       }
 
@@ -93,10 +110,10 @@ export class OfflineDraftValidator {
         }
       }
 
-      const duration = Date.now() - startTime;
+      const duration = this.elapsedMs(startTime);
       return this.buildResult(draft, blockers, warnings, validRecordIndices, duration);
     } catch (error) {
-      const duration = Date.now() - startTime;
+      const duration = this.elapsedMs(startTime);
       blockers.push({
         severity: "blocker",
         category: "other",
@@ -105,6 +122,16 @@ export class OfflineDraftValidator {
       });
       return this.buildResult(draft, blockers, warnings, validRecordIndices, duration);
     }
+  }
+
+  /**
+   * Wall-clock time elapsed since validation started, floored at 1ms so a
+   * fast (sub-millisecond) validation is never reported as 0ms.
+   *
+   * @private
+   */
+  private elapsedMs(startTime: number): number {
+    return Math.max(1, Date.now() - startTime);
   }
 
   /**
@@ -456,7 +483,8 @@ export class OfflineDraftValidator {
     validRecordIndices: Set<number>,
     durationMs: number
   ): DraftValidationResult {
-    const recordsWithIssues = draft.records.length - validRecordIndices.size;
+    const recordCount = draft ? draft.records.length : 0;
+    const recordsWithIssues = recordCount - validRecordIndices.size;
 
     return {
       isValid: blockers.length === 0,
@@ -464,7 +492,7 @@ export class OfflineDraftValidator {
       blockers,
       warnings,
       summary: {
-        totalRecords: draft.records.length,
+        totalRecords: recordCount,
         validRecords: validRecordIndices.size,
         recordsWithIssues,
         totalBlockers: blockers.length,
