@@ -4,3 +4,4 @@ export { ExpectationBuilder, MethodExpectation } from "./ExpectationBuilder";
 export * from "./FlakyRpcServer";
 export * from "./generators";
 export * from "./fixtures";
+export * from "./scenarios";
